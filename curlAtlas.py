@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 import re
 import time
 import requests
+import html
 
 
 class equipoAtlas:
@@ -94,11 +95,10 @@ def ejecutaCurl(url, referer = '', data = '', mantener = True):
 
 def extraerEquipos(respuesta):
 
-    m = re.search(r"MatrizEquipos.[0-9]+. = new Array\((.*)\);", respuesta)
-    print(len(m.groups()))
+    m = re.findall(r"MatrizEquipos.[0-9]+. = new Array\((.*)\);", respuesta)
     equipo = None
     if m:
-        for linea in m.groups():
+        for linea in m:
             '''
             "M.JV0035","DSL ","2","T","DSL","7360 ","IMAG   ","000004","I ","5BSA280021","000026","000019","S","MM-M-M-JV0035-A4              ","S"," 172.  18.  13. 117","284054","044","000004","               ","TLF","                  "
             '''
@@ -110,6 +110,62 @@ def extraerEquipos(respuesta):
 
     print(f'Hemos obtenido los equipos.')
     return equipo
+
+def extraerTarjetas(respuesta):
+    '''
+       	<tr align="center" bgcolor="#006699" class="text2">
+
+        <td width="20px" class="textg1b"></td>
+        <td class="textg1b" nowrap>N&uacute;mero</td>
+        <td class="textg1b" nowrap>C&oacute;digo</td>
+        <td class="textg1b" nowrap>N&ordm; Serie</td>
+        <td class="textg1b" nowrap>Configuraci&oacute;n</td>
+        <td class="textg1b" nowrap>Proyecto</td>
+        <td class="textg1b" nowrap>Cuestionario</td>
+        <td class="textg1b" nowrap>Agente</td>
+        <td class="textg1b" nowrap width="130px">Ubicación</td>
+        <td class="textg1b" nowrap width="30px">SI</td>
+        <td class="textg1b" nowrap width="100px">F.Inst.</td>
+        <td class="textg1b" nowrap width="100px">F.Desm.</td>
+
+   		</tr>
+    '''
+    listaCampos = ('Número', 'Código', 'Nº Serie', 'Configuración', 'Proyecto', 'Cuestionario', 'Agente', 'Ubicación', 'SI', 'F.Inst.', 'F.Desm.')
+    infoTarjetas = {}
+    bloqueTarjetas = respuesta[respuesta.find(r"<input type='checkbox' name='chk' id='chk' onClick='SubirValor(this.value)' value='0'></td>"): respuesta.find(r"</form>")]
+
+    # bloqueTarjetas = html.unescape(bloqueTarjetas)
+
+    numTarjeta = 0
+    posicion = 0
+    exprIniTarjeta = "input type='checkbox' name='chk' id='chk' onClick='SubirValor(this.value)' value='"
+    while bloqueTarjetas.find(exprIniTarjeta, posicion) > 0:
+        # print(f'La posicion de partida es {posicion}')
+        posicion = bloqueTarjetas.find(exprIniTarjeta, posicion)
+        infoTarjeta = bloqueTarjetas[posicion : bloqueTarjetas.find('</tr>', posicion)]
+        # print(f'Encontrada nueva tarjeta...\n[{infoTarjeta}]')
+        indiceCampo = 0
+        datosTarjeta = []
+        posicionTarjeta = 0
+        while infoTarjeta.find("<td>", posicionTarjeta) > 0:
+            posicionTarjeta = infoTarjeta.find("<td>", posicionTarjeta) + 4
+            dato = infoTarjeta[posicionTarjeta:infoTarjeta.find("</td>", posicionTarjeta)]
+            datosTarjeta.append(decodificar(dato))
+            indiceCampo += 1
+        # print(datosTarjeta)
+        infoTarjetas[datosTarjeta[0]] = datosTarjeta
+        numTarjeta += 1
+        posicion += posicionTarjeta
+        indice = 0
+
+    return infoTarjetas
+
+def decodificar(text):
+    # text = 'jalape&ntilde;os & fun'
+    from html import unescape
+    texto = unescape(text)
+    print(texto)
+    return texto
 
 
 '''
@@ -151,6 +207,9 @@ headers = {
 }
 '''
 
+
+
+
 urlAtlas = 'https://atlas.es.telefonica/'
 rutaValidacion = 'siteminderagent/login.fcc?TARGET=-SM-https%3a%2f%2fatlas%2ees%2etelefonica%2fatlaspaOpen%2fjsp%2findex%2ejsp'
 aplicacion = 'atlaspaOpen/'
@@ -180,42 +239,28 @@ respuesta1 = ejecutaCurl(urlPrimera, data = dataGrupo)
 
 # urlTercera = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ&critLibre=MM-M-M-JV0035-A4&ordenacion=N'
 dataOpcion = {'txtCriter': 'MM-M-M-JV0035-A4', 'ordenacion': 'N'}
+dataOpcion = {'txtCriter': 'MM-V-V-AL-A4', 'ordenacion': 'N'}
+
 urlEquipos = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ'
 respuestaEquipos = ejecutaCurl(urlEquipos, data = dataOpcion)
 
 
 equipo = extraerEquipos(respuestaEquipos)
 
-urlEquipamiento = urlAtlas + aplicacion + f'jsp/frmA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtEspeci={equipo.ESPEC}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtNEquipo={equipo.N_EQUIPO}&equiNuIntern={equipo.N_EQUIPO}&txtAgente={equipo.AGENTE}'
-# https://atlas.es.telefonica/atlaspaOpen/jsp/frmA2PC00M0.jsp?caso=1&txtLoc1=M.JV0035&txtLoc2=DSL&txtLoc3=2&txtArea=T&txtEspeci=IMAG&txtTipo=DSL&gLocaCoIntern=990001989&txtModelo=7360&txtNEquipo=000004&equiNuIntern=000004&txtAgente=TLF
+urlEquipamiento = urlAtlas + aplicacion + f'jsp/mainA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtEspeci={equipo.ESPEC}&txtNEquipo={equipo.N_EQUIPO}&paginar=null&posicionar=&txtCantidad=null&colaEquipos=null&equiNuIntern={equipo.N_EQUIPO}&txtAgente={equipo.AGENTE}'
 respuestaEquipamiento = ejecutaCurl(urlEquipamiento)
 
+listaTarjetas = extraerTarjetas(respuestaEquipamiento)
+for tarjeta in listaTarjetas.keys():
 
-urlTercera = urlAtlas + aplicacion + f'cgi-bin/{ParInforme}.pl?informe={ParInforme}&accion=PAR'
-respuesta3 = ejecutaCurl(urlTercera)
-
-urlCuarta = urlAtlas + aplicacion + f'cgi-bin/Preguntar_CSV.pl?informe={ParInforme}'
-respuesta4 = ejecutaCurl(urlCuarta)
-
-#peticionDiferida(urlAtlas + aplicacion, ParInforme, '2024-03-18 13:10:00')
-
+    print(f'Tarjeta {tarjeta}:')
+    datos = listaTarjetas[tarjeta]
+    sdatos = ""
+    for i in range(len(datos)):
+        sdatos += f'[{datos[i]}] \t'
+    print(sdatos)
 
 
-'''
-Vamos a pedir el listado de diferidos...
-'''
-urlListaDiferidos = urlAtlas + aplicacion + f'cgi-bin/procesa_diferido_listado.pl?accion=listado'
-respuestaDiferidos = ejecutaCurl(urlListaDiferidos)
 
-# Tenemos que pedir <usuario>_<informe>_<YYYYMMDDHHMI>_001.csv
-fichero = data['USER'].upper() + '_' + ParInforme + '_' +  '202403181310_001.csv'
-urlObtenerFichero = urlAtlas + aplicacion + f'cgi-bin/procesa_diferido_listado.pl?informe={fichero}'
-#urlObtenerFichero = urlAtlas + aplicacion + f'cgi-bin/{ParInforme}.pl?informe={ParInforme}&programa=&accion=PLA&cabecera=no&f_diferido=&hora=&min=&token=&area=&central='
-'''
-{urlAtlas}{aplicacion}cgi-bin/${NombreFichero}.pl?informe=FTTH_PEN_05_0&programa=&accion=PLA&cabecera=no&f_diferido=&hora=&min=&token=&area=&central="
-'''
-obtenerFichero(urlObtenerFichero, 'FTTH_PEN_05_0')
-#obtenerFichero(urlObtenerFichero, 'FTTH_PEN_05_0', f'{urlAtlas}{aplicacion}cgi-bin/{ParInforme}.pl?informe={ParInforme}&accion=DIF')
-#obtenerFichero(urlObtenerFichero, 'FTTH_PEN_05_0', f'{urlAtlas}{aplicacion}cgi-bin/procesa_diferido_listado.pl?accion=listado')
 
 # ${Curl} -m ${TmpPeticionInf} -o FTTH_PEN_05_0 ${Referer} \"${Direccion}\"
