@@ -2,17 +2,14 @@ import pycurl
 from io import BytesIO
 from urllib.parse import urlencode
 import re
-import time
-import requests
-import html
-
+import json
 
 class equipoAtlas:
     def __init__(self, origenAtlas):
         '''
         "M.JV0035","DSL ","2","T","DSL","7360 ","IMAG   ","000004","I ","5BSA280021","000026","000019","S","MM-M-M-JV0035-A4              ","S"," 172.  18.  13. 117","284054","044","000004","               ","TLF","                  "
         '''
-        print(f'Hemos recibido: {origenAtlas}')
+        # print(f'Hemos recibido: {origenAtlas}')
         if origenAtlas != '':
             datos = origenAtlas.split(',')
             if len(datos) != 22:
@@ -20,7 +17,7 @@ class equipoAtlas:
             else:
                 for indice in range(len(datos)):
                     valor = datos[indice].replace('\"', '')
-                    print(valor)
+                    # print(valor)
                     if indice == 0:
                         self.LOCA_1 = valor.strip()
                     elif indice == 1:
@@ -41,14 +38,18 @@ class equipoAtlas:
                         self.SI = valor.strip()
                     elif indice == 9:
                         self.CUESTIONARIO = valor.strip()
+                    elif indice == 13:
+                        self.DISCR = valor.strip()
                     elif indice == 19:
                         self.AGENTE = valor.strip()
-            print(self)
+            # print(self)
         else:
             pass
 
 def headers(buf):
-    print(buf)
+    # imprimimos los headers
+    # print(buf)
+    pass
 
 def ejecutaCurl(url, referer = '', data = '', mantener = True):
     print('-------------------------------------')
@@ -86,7 +87,7 @@ def ejecutaCurl(url, referer = '', data = '', mantener = True):
     get_body = b_obj.getvalue()
     s_request = get_body.decode('iso-8859-15')
     # Decode the bytes and print the result
-    print(f'Salida del request:\n{s_request}')
+    # print(f'Salida del request:\n{s_request}')
     return s_request
 
 
@@ -108,7 +109,7 @@ def extraerEquipos(respuesta):
                 equipo = equipoAtlas(linea)
                 break
 
-    print(f'Hemos obtenido los equipos.')
+    print(f'>Equipos coincidenctes seleccionados.')
     return equipo
 
 def extraerTarjetas(respuesta):
@@ -149,7 +150,7 @@ def extraerTarjetas(respuesta):
         posicionTarjeta = 0
         while infoTarjeta.find("<td>", posicionTarjeta) > 0:
             posicionTarjeta = infoTarjeta.find("<td>", posicionTarjeta) + 4
-            dato = infoTarjeta[posicionTarjeta:infoTarjeta.find("</td>", posicionTarjeta)]
+            dato = infoTarjeta[posicionTarjeta:infoTarjeta.find("</td>", posicionTarjeta)].strip()
             datosTarjeta.append(decodificar(dato))
             indiceCampo += 1
         # print(datosTarjeta)
@@ -157,16 +158,130 @@ def extraerTarjetas(respuesta):
         numTarjeta += 1
         posicion += posicionTarjeta
         indice = 0
-
+    print('>Tarjetas localizadas.')
     return infoTarjetas
 
 def decodificar(text):
     # text = 'jalape&ntilde;os & fun'
     from html import unescape
     texto = unescape(text)
-    print(texto)
+    #print(texto)
     return texto
 
+
+def imprimirListaTarjetas(equipo, listaTarjetas):
+    print(f'Listado de tarjetas del equipo {equipo.DISCR} modelo {equipo.MODELO}:\n')
+    listaCampos = ( 'Número', 'Código', 'Nº Serie', 'Configuración', 'Proyecto', 'Cuestionario', 'Agente', 'Ubicación', 'SI', 'F.Inst.', 'F.Desm.')
+    cabecera = ""
+    for campo in range(len(listaCampos)):
+        cabecera += f'{listaCampos[campo]}\t'
+    print(f'{cabecera}')
+    for tarjeta in listaTarjetas.keys():
+
+        # print(f'Tarjeta {tarjeta}:')
+        datos = listaTarjetas[tarjeta]
+        sdatos = ""
+        for i in range(len(datos)):
+            sdatos += f'[{datos[i]}] \t'
+        print(sdatos)
+
+
+def determinarResultado(equipo, listaTarjetas):
+    # generamos la lista de tarjetas equipadas
+    jsonRespuesta = ''
+    claves = [clave[-2:] for clave in listaTarjetas.keys()]
+
+    dualControl = False
+    posicionC1 = ''
+    posicionC2 = ''
+    if equipo.MODELO == '5800P':
+        if existeValor('08', claves) and existeValor('09', claves):
+            dualControl = True
+            posicionC1 = '08'
+            posicionC2 = '09'
+        else:
+            if existeValor('08', claves):
+                posicionC1 = '08'
+            elif existeValor('09', claves):
+                posicionC1 = '09'
+            else:
+                posicionC1 = 'ERROR'
+    elif equipo.MODELO == '5603T':
+        if existeValor('06', claves) and existeValor('07', claves):
+            dualControl = True
+            posicionC1 = '06'
+            posicionC2 = '07'
+        else:
+            if existeValor('06', claves):
+                posicionC1 = '06'
+            elif existeValor('07', claves):
+                posicionC1 = '07'
+            else:
+                posicionC1 = 'ERROR'
+    elif equipo.MODELO == '5606T':
+        if existeValor('01', claves):
+            posicionC1 = '01'
+    else:
+        if existeValor('09', claves) and existeValor('10', claves):
+            dualControl = True
+            posicionC1 = '09'
+            posicionC2 = '10'
+        else:
+            if existeValor('09', claves):
+                posicionC1 = '09'
+            elif existeValor('10', claves):
+                posicionC1 = '10'
+            else:
+                posicionC1 = 'ERROR'
+    if (dualControl):
+        print(f'Modelo {equipo.MODELO} equipado con DOBLE_CONTROLADORA en los slots {posicionC1} y {posicionC2}')
+        jsonRespuesta = generarRespuesta(equipo.DISCR, equipo.MODELO, dualControl, posicionC1, posicionC2)
+        # return f'DOBLE_CONTROLADORA#{posicionC1}_{posicionC2}'
+    else:
+        if posicionC1 != 'ERROR':
+            print(f'Modelo {equipo.MODELO} equipado con UNICA_CONTROLADORA en el slot {posicionC1}')
+            jsonRespuesta = generarRespuesta(equipo.DISCR, equipo.MODELO, dualControl, posicionC1, posicionC2)
+            # return f'UNICA_CONTROLADORA#{posicionC1}'
+        else:
+            print(f'Modelo {equipo.MODELO} no se ha podido determinar la posicion de la controladora.')
+            jsonRespuesta = generarRespuesta(equipo.DISCR, equipo.MODELO, dualControl, posicionC1, posicionC2)
+
+    return jsonRespuesta
+
+'''
+generarRespuesta: generamos una respuesta en formato json, con los valores 
+EQUIPO: <nombre_equipo>
+MODELO: <modelo_equipo>
+TIPO_CONTROL: (DUAL_CONTROL |SINGLE_CONTROL|ERROR)
+CONTROL_1: ()<slot_controladora1>|'ERROR')
+CONTROL_2: (<slot_controladora2>|'')
+'''
+def generarRespuesta(equipo, modelo, dualControl, c1, c2):
+    dictRespuesta = {}
+    dictRespuesta['EQUIPO'] = equipo
+    dictRespuesta['MODELO'] = modelo
+    dictRespuesta['CONTROLADORA_1'] = c1
+    dictRespuesta['CONTROLADORA_2'] = c2
+    if dualControl:
+        dictRespuesta['TIPO_CONTROL'] = 'DUAL_CONTROL'
+    else:
+        if c1 != 'ERROR':
+            dictRespuesta['TIPO_CONTROL'] = 'SINGLE_CONTROL'
+        else:
+            dictRespuesta['TIPO_CONTROL'] = 'ERROR'
+            dictRespuesta['CONTROLADORA_2'] = 'ERROR'
+    jsonRespuesta = json.dumps(dictRespuesta)
+    return jsonRespuesta
+
+def existeValor(value, lista):
+    existe = False
+    try:
+        if lista.index(value) > 0:
+            return True
+
+    except:
+        existe = False
+    return existe
 
 '''
 def descargaBloques(url):
@@ -209,56 +324,60 @@ headers = {
 
 
 
+if __name__ == '__main__':
+    import sys
 
-urlAtlas = 'https://atlas.es.telefonica/'
-rutaValidacion = 'siteminderagent/login.fcc?TARGET=-SM-https%3a%2f%2fatlas%2ees%2etelefonica%2fatlaspaOpen%2fjsp%2findex%2ejsp'
-aplicacion = 'atlaspaOpen/'
-rutaAtlas = 'jsp/index.jsp'
-urlInicio = urlAtlas + rutaValidacion
-#urlInicio =  urlAtlas + rutaMiapa
+    if len(sys.argv) != 2:
+        print('Error: numero de parametros incorrecto.')
+        exit()
+    else:
+        equipo = sys.argv[1]
 
-'''
-Rellenamos los datos a propagar
-USER=
-PASSWORD=
-'''
-#data = { 'USER': 'USL0318', 'PASSWORD': '0amz9kt0jd'}
-data = { 'USER': 'USL0318', 'PASSWORD': '0amz9kt0jd'}
+    urlAtlas = 'https://atlas.es.telefonica/'
+    rutaValidacion = 'siteminderagent/login.fcc?TARGET=-SM-https%3a%2f%2fatlas%2ees%2etelefonica%2fatlaspaOpen%2fjsp%2findex%2ejsp'
+    aplicacion = 'atlaspaOpen/'
+    rutaAtlas = 'jsp/index.jsp'
+    urlInicio = urlAtlas + rutaValidacion
 
-respuesta = ejecutaCurl(urlInicio, data = data, mantener = False)
-#miToken = obtenerToken(respuesta)
+    data = { 'USER': 'USL0318', 'PASSWORD': '0amz9kt0jd'}
 
-dataGrupo = { 'locaCo1scloc': 'DOPMBASE', 'grop': '200'}
-
-# tenemos que pasar los datos de la unidad operativa.
-urlPrimera = urlAtlas + aplicacion + 'servlet/ServletConexion'
-respuesta1 = ejecutaCurl(urlPrimera, data = dataGrupo)
-
-#Aqui tenemos que comprobar, en las cabeceras, que viene unop=[0-9]{9}
+    respuesta = ejecutaCurl(urlInicio, data = data, mantener = False)
 
 
-# urlTercera = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ&critLibre=MM-M-M-JV0035-A4&ordenacion=N'
-dataOpcion = {'txtCriter': 'MM-M-M-JV0035-A4', 'ordenacion': 'N'}
-dataOpcion = {'txtCriter': 'MM-V-V-AL-A4', 'ordenacion': 'N'}
+    dataGrupo = { 'locaCo1scloc': 'DOPMBASE', 'grop': '200'}
+    # tenemos que pasar los datos de la unidad operativa.
+    urlPrimera = urlAtlas + aplicacion + 'servlet/ServletConexion'
+    respuesta1 = ejecutaCurl(urlPrimera, data = dataGrupo)
 
-urlEquipos = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ'
-respuestaEquipos = ejecutaCurl(urlEquipos, data = dataOpcion)
+    #Aqui tenemos que comprobar, en las cabeceras, que viene unop=[0-9]{9}
 
 
-equipo = extraerEquipos(respuestaEquipos)
+    # urlTercera = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ&critLibre=MM-M-M-JV0035-A4&ordenacion=N'
+    '''
+    equipo = 'MM-M-M-JV0035-A4' # Tecnologia
+    equipo = 'MM-V-V-AL-A4'
+    equipo = 'MM-AL-ROM-H4'  # 5600T Unica controladora
+    equipo = 'MM-B-H-CS-H17' # 5600T Unica controladora
+    equipo = 'MM-L-L-BO-H2'  # 5800X Unica controladora
+    equipo = 'MM-L-L-BO-H3'  # 5800X con solo una tarjeta en el slot 1 ( No cumple la norma )
+    equipo = 'MM-AL-ADRA-H2'
+    '''
 
-urlEquipamiento = urlAtlas + aplicacion + f'jsp/mainA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtEspeci={equipo.ESPEC}&txtNEquipo={equipo.N_EQUIPO}&paginar=null&posicionar=&txtCantidad=null&colaEquipos=null&equiNuIntern={equipo.N_EQUIPO}&txtAgente={equipo.AGENTE}'
-respuestaEquipamiento = ejecutaCurl(urlEquipamiento)
+    # Realizamos la consulta de equipos por Criterio Libre
+    dataOpcion = {'txtCriter': equipo, 'ordenacion': 'N'}
+    urlEquipos = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ'
+    respuestaEquipos = ejecutaCurl(urlEquipos, data = dataOpcion)
+    # Extraemos los datos del equipo
+    equipo = extraerEquipos(respuestaEquipos)
 
-listaTarjetas = extraerTarjetas(respuestaEquipamiento)
-for tarjeta in listaTarjetas.keys():
+    # Realizamos la consulta de las tarjetas del equipo
+    urlEquipamiento = urlAtlas + aplicacion + f'jsp/mainA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtEspeci={equipo.ESPEC}&txtNEquipo={equipo.N_EQUIPO}&paginar=null&posicionar=&txtCantidad=null&colaEquipos=null&equiNuIntern={equipo.N_EQUIPO}&txtAgente={equipo.AGENTE}'
+    respuestaEquipamiento = ejecutaCurl(urlEquipamiento)
+    listaTarjetas = extraerTarjetas(respuestaEquipamiento)
 
-    print(f'Tarjeta {tarjeta}:')
-    datos = listaTarjetas[tarjeta]
-    sdatos = ""
-    for i in range(len(datos)):
-        sdatos += f'[{datos[i]}] \t'
-    print(sdatos)
+    imprimirListaTarjetas(equipo, listaTarjetas)
+    salida = determinarResultado(equipo, listaTarjetas)
+    print(salida)
 
 
 
