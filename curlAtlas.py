@@ -48,13 +48,15 @@ class equipoAtlas:
 
 def headers(buf):
     # imprimimos los headers
-    # print(buf)
+    if __habilitarTrazas__:
+        print(buf)
     pass
 
 def ejecutaCurl(url, referer = '', data = '', mantener = True):
-    print('-------------------------------------')
-    print(f'Ejecutamos cUrl a la url <{url}>')
-    print('-------------------------------------')
+    printT('-------------------------------------')
+    printT(f'Ejecutamos cUrl a la url <{url}>')
+    printT('-------------------------------------')
+
     b_obj = BytesIO()
     crl = pycurl.Curl()
     crl.setopt(pycurl.URL, url)
@@ -69,8 +71,8 @@ def ejecutaCurl(url, referer = '', data = '', mantener = True):
     crl.setopt(pycurl.SSL_VERIFYHOST, False)
     #crl.setopt(pycurl.VERBOSE, True)
     crl.setopt(pycurl.WRITEDATA, b_obj)
-    crl.setopt(pycurl.COOKIEJAR, 'D://T138708/cookie.txt')
-    crl.setopt(pycurl.COOKIEFILE, 'D://T138708/cookie.txt')
+    crl.setopt(pycurl.COOKIEJAR, 'C://Users//T138708/cookie.txt')
+    crl.setopt(pycurl.COOKIEFILE, 'C://Users//T138708/cookie.txt')
     # con la opcion HEADERFUNCTION, le decimos lo que debe hacer con los headers
     crl.setopt(pycurl.HEADERFUNCTION, headers)
     crl.setopt(pycurl.REFERER, referer)
@@ -87,7 +89,7 @@ def ejecutaCurl(url, referer = '', data = '', mantener = True):
     get_body = b_obj.getvalue()
     s_request = get_body.decode('iso-8859-15')
     # Decode the bytes and print the result
-    # print(f'Salida del request:\n{s_request}')
+    #printT(f'Salida del request:\n{s_request}')
     return s_request
 
 
@@ -95,21 +97,28 @@ def ejecutaCurl(url, referer = '', data = '', mantener = True):
 
 
 def extraerEquipos(respuesta):
-
     m = re.findall(r"MatrizEquipos.[0-9]+. = new Array\((.*)\);", respuesta)
     equipo = None
     if m:
+        printT(f'************** EQUIPOS ****************\n')
         for linea in m:
             '''
             "M.JV0035","DSL ","2","T","DSL","7360 ","IMAG   ","000004","I ","5BSA280021","000026","000019","S","MM-M-M-JV0035-A4              ","S"," 172.  18.  13. 117","284054","044","000004","               ","TLF","                  "
             '''
+            printT(f'{linea}')
             datos = linea.split(',')
             valor = datos[4].replace('\"', '')
             if valor == 'DSL':
                 equipo = equipoAtlas(linea)
                 break
+            else:
+                printT(f'El equipo no es un DSL')
 
-    print(f'>Equipos coincidenctes seleccionados.')
+
+        printT(f'\n************ FIN EQUIPOS **************')
+        printT(f'>Equipos coincidentes seleccionados.')
+    else:
+        printT(f'>No se ha podido extraer equipo.')
     return equipo
 
 def extraerTarjetas(respuesta):
@@ -153,12 +162,13 @@ def extraerTarjetas(respuesta):
             dato = infoTarjeta[posicionTarjeta:infoTarjeta.find("</td>", posicionTarjeta)].strip()
             datosTarjeta.append(decodificar(dato))
             indiceCampo += 1
-        # print(datosTarjeta)
+        printT(datosTarjeta)
         infoTarjetas[datosTarjeta[0]] = datosTarjeta
         numTarjeta += 1
         posicion += posicionTarjeta
         indice = 0
-    print('>Tarjetas localizadas.')
+    if __habilitarTrazas__:
+        print('>Tarjetas localizadas.')
     return infoTarjetas
 
 def decodificar(text):
@@ -170,12 +180,12 @@ def decodificar(text):
 
 
 def imprimirListaTarjetas(equipo, listaTarjetas):
-    print(f'Listado de tarjetas del equipo {equipo.DISCR} modelo {equipo.MODELO}:\n')
     listaCampos = ( 'Número', 'Código', 'Nº Serie', 'Configuración', 'Proyecto', 'Cuestionario', 'Agente', 'Ubicación', 'SI', 'F.Inst.', 'F.Desm.')
     cabecera = ""
     for campo in range(len(listaCampos)):
         cabecera += f'{listaCampos[campo]}\t'
-    print(f'{cabecera}')
+    printT(f'Listado de tarjetas del equipo {equipo.DISCR} modelo {equipo.MODELO}:\n')
+    printT(f'{cabecera}')
     for tarjeta in listaTarjetas.keys():
 
         # print(f'Tarjeta {tarjeta}:')
@@ -183,7 +193,7 @@ def imprimirListaTarjetas(equipo, listaTarjetas):
         sdatos = ""
         for i in range(len(datos)):
             sdatos += f'[{datos[i]}] \t'
-        print(sdatos)
+        printT(sdatos)
 
 
 def determinarResultado(equipo, listaTarjetas):
@@ -234,16 +244,16 @@ def determinarResultado(equipo, listaTarjetas):
             else:
                 posicionC1 = 'ERROR'
     if (dualControl):
-        print(f'Modelo {equipo.MODELO} equipado con DOBLE_CONTROLADORA en los slots {posicionC1} y {posicionC2}')
+        printT(f'Modelo {equipo.MODELO} equipado con DOBLE_CONTROLADORA en los slots {posicionC1} y {posicionC2}')
         jsonRespuesta = generarRespuesta(equipo.DISCR, equipo.MODELO, dualControl, posicionC1, posicionC2)
         # return f'DOBLE_CONTROLADORA#{posicionC1}_{posicionC2}'
     else:
         if posicionC1 != 'ERROR':
-            print(f'Modelo {equipo.MODELO} equipado con UNICA_CONTROLADORA en el slot {posicionC1}')
+            printT(f'Modelo {equipo.MODELO} equipado con UNICA_CONTROLADORA en el slot {posicionC1}')
             jsonRespuesta = generarRespuesta(equipo.DISCR, equipo.MODELO, dualControl, posicionC1, posicionC2)
             # return f'UNICA_CONTROLADORA#{posicionC1}'
         else:
-            print(f'Modelo {equipo.MODELO} no se ha podido determinar la posicion de la controladora.')
+            printT(f'Modelo {equipo.MODELO} no se ha podido determinar la posicion de la controladora.')
             jsonRespuesta = generarRespuesta(equipo.DISCR, equipo.MODELO, dualControl, posicionC1, posicionC2)
 
     return jsonRespuesta
@@ -322,24 +332,49 @@ headers = {
 }
 '''
 
+def printT(texto):
+    if __habilitarTrazas__:
+        print(f'{texto}')
 
 
 if __name__ == '__main__':
     import sys
 
+    __habilitarTrazas__ = False
+    __desarrollo__ = False
+
     if len(sys.argv) != 2:
         print('Error: numero de parametros incorrecto.')
         exit()
     else:
-        equipo = sys.argv[1]
+        criterio_equipo = sys.argv[1]
 
-    urlAtlas = 'https://atlas.es.telefonica/'
-    rutaValidacion = 'siteminderagent/login.fcc?TARGET=-SM-https%3a%2f%2fatlas%2ees%2etelefonica%2fatlaspaOpen%2fjsp%2findex%2ejsp'
+    urlAtlasProd = 'https://atlas.es.telefonica/'
+    urlAtlasCert = 'https://atlas.dev.es.telefonica/'
+    rutaValidacionProd = 'siteminderagent/login.fcc?TARGET=-SM-https%3a%2f%2fatlas%2ees%2etelefonica%2fatlaspaOpen%2fjsp%2findex%2ejsp'
+    rutaValidacionCert = 'siteminderagent/login.fcc?TARGET=-SM-https%3a%2f%2fatlas%2edev%2ees%2etelefonica%2fatlaspaOpen%2fjsp%2findex%2ejsp'
     aplicacion = 'atlaspaOpen/'
     rutaAtlas = 'jsp/index.jsp'
+    if __desarrollo__ :
+        urlAtlas = urlAtlasCert
+        rutaValidacion = rutaValidacionCert
+    else:
+        urlAtlas = urlAtlasProd
+        rutaValidacion = rutaValidacionProd
+
     urlInicio = urlAtlas + rutaValidacion
 
+    '''
+    Rellenamos los datos a propagar
+    USER=
+    PASSWORD=
+    '''
     data = { 'USER': 'USL0318', 'PASSWORD': '0amz9kt0jd'}
+    dataCert = { 'USER': 'usl0318', 'PASSWORD': 'grzjV2Gh5E'}
+
+    if __desarrollo__ :
+        data = dataCert
+
 
     respuesta = ejecutaCurl(urlInicio, data = data, mantener = False)
 
@@ -364,19 +399,24 @@ if __name__ == '__main__':
     '''
 
     # Realizamos la consulta de equipos por Criterio Libre
-    dataOpcion = {'txtCriter': equipo, 'ordenacion': 'N'}
+    dataOpcion = {'txtCriter': criterio_equipo, 'ordenacion': 'N'}
     urlEquipos = urlAtlas + aplicacion + f'jsp/mainA2EQ00M0b.jsp?his=EQ'
     respuestaEquipos = ejecutaCurl(urlEquipos, data = dataOpcion)
     # Extraemos los datos del equipo
     equipo = extraerEquipos(respuestaEquipos)
+    if equipo != None:
+        printT(f'Vamos a consultar con ')
+        # Realizamos la consulta de las tarjetas del equipo
+        urlEquipamiento = urlAtlas + aplicacion + f'jsp/mainA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtEspeci={equipo.ESPEC}&txtNEquipo={equipo.N_EQUIPO}&paginar=null&posicionar=&txtCantidad=null&colaEquipos=null&equiNuIntern={equipo.N_EQUIPO}&txtAgente={equipo.AGENTE}'
+        urlEquipamiento = urlAtlas + aplicacion + f'jsp/mainA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtEspeci={equipo.ESPEC}&txtNEquipo={equipo.N_EQUIPO}&paginar=null&posicionar=&txtCantidad=null&colaEquipos=null&txtAgente={equipo.AGENTE}'
 
-    # Realizamos la consulta de las tarjetas del equipo
-    urlEquipamiento = urlAtlas + aplicacion + f'jsp/mainA2PC00M0.jsp?caso=1&txtLoc1={equipo.LOCA_1}&txtLoc2={equipo.LOCA_2}&txtLoc3={equipo.LOCA_3}&txtArea={equipo.AREA}&txtTipo={equipo.TIPO}&gLocaCoIntern=990001989&txtModelo={equipo.MODELO}&txtEspeci={equipo.ESPEC}&txtNEquipo={equipo.N_EQUIPO}&paginar=null&posicionar=&txtCantidad=null&colaEquipos=null&equiNuIntern={equipo.N_EQUIPO}&txtAgente={equipo.AGENTE}'
-    respuestaEquipamiento = ejecutaCurl(urlEquipamiento)
-    listaTarjetas = extraerTarjetas(respuestaEquipamiento)
+        respuestaEquipamiento = ejecutaCurl(urlEquipamiento)
+        listaTarjetas = extraerTarjetas(respuestaEquipamiento)
 
-    imprimirListaTarjetas(equipo, listaTarjetas)
-    salida = determinarResultado(equipo, listaTarjetas)
+        imprimirListaTarjetas(equipo, listaTarjetas)
+        salida = determinarResultado(equipo, listaTarjetas)
+    else:
+        salida = generarRespuesta(criterio_equipo, 'ERROR', False, 'ERROR', 'ERROR')
     print(salida)
 
 
